@@ -1,0 +1,26 @@
+--- #YAML:1.0
+name:               AnyEvent-Whois-Raw
+version:            0.01
+abstract:           Non-blocking wrapper for Net::Whois::Raw
+author:
+    - Oleg G <oleg@cpan.org>
+license:            perl
+distribution_type:  module
+configure_requires:
+    ExtUtils::MakeMaker:  0
+build_requires:
+    Test::More:  0.88
+requires:
+    AnyEvent:         0
+    AnyEvent::HTTP:   0
+    Net::Whois::Raw:  2.32
+resources:
+    repository:  https://github.com/olegwtf/p5-AnyEvent-Whois-Raw
+no_index:
+    directory:
+        - t
+        - inc
+generated_by:       ExtUtils::MakeMaker version 6.56
+meta-spec:
+    url:      http://module-build.sourceforge.net/META-spec-v1.4.html
+    version:  1.4
