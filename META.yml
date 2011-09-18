@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               AnyEvent-Whois-Raw
-version:            0.01
+version:            0.02
 abstract:           Non-blocking wrapper for Net::Whois::Raw
 author:
     - Oleg G <oleg@cpan.org>
@@ -11,9 +11,9 @@ configure_requires:
 build_requires:
     Test::More:  0.88
 requires:
-    AnyEvent:         0
-    AnyEvent::HTTP:   0
-    Net::Whois::Raw:  2.32
+    AnyEvent:         3.3
+    AnyEvent::HTTP:   1.43
+    Net::Whois::Raw:  2.31
 resources:
     repository:  https://github.com/olegwtf/p5-AnyEvent-Whois-Raw
 no_index:
