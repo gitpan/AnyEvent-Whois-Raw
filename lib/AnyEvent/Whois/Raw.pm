@@ -8,7 +8,7 @@ use AnyEvent::HTTP;
 use strict;
 no warnings 'redefine';
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 our @EXPORT = qw(whois get_whois);
 our $stash;
 
@@ -132,12 +132,15 @@ sub Net::Whois::Raw::whois_query {
 }
 
 sub whois_query_ae {
-	my ($dom, $srv, $is_ns) = @_;
+	my ($dom, $srv_and_port, $is_ns) = @_;
+
 	
-	my $whoisquery = Net::Whois::Raw::Common::get_real_whois_query($dom, $srv, $is_ns);
+	my $whoisquery = Net::Whois::Raw::Common::get_real_whois_query($dom, $srv_and_port, $is_ns);
 	my $stash_ref = $stash;
+
+	my ($srv, $port) = split /:/, $srv_and_port;
 	
-	tcp_connect $srv, 43, sub {
+	tcp_connect $srv, $port || 43, sub {
 		my $fh = shift;
 		unless ($fh) {
 			$stash_ref->{args}->[-1]->('', "Connection to $srv failed: $!");
@@ -270,8 +273,8 @@ sub www_whois_query_ae_request {
 		require URI::URL;
 		
 		my $curl = URI::URL->new("http:");
-	    $curl->query_form( %{$qurl->{form}} );
-	    http_post $qurl->{url}, $curl->equery, headers => $headers, @params, $cb;
+		$curl->query_form( %{$qurl->{form}} );
+		http_post $qurl->{url}, $curl->equery, headers => $headers, @params, $cb;
 	}
 	else {
 		http_get $qurl->{url}, headers => $headers,  @params, $cb;
