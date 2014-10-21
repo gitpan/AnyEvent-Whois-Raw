@@ -8,7 +8,7 @@ use AnyEvent::HTTP;
 use strict;
 no warnings 'redefine';
 
-our $VERSION = '0.05';
+our $VERSION = '0.06';
 our @EXPORT = qw(whois get_whois);
 our $stash;
 
@@ -186,11 +186,15 @@ sub whois_query_ae {
 		);
 		
 		$handle->push_write($whoisquery."\015\012");
-	}, sub { local $stash = $stash_ref; &_sock_prepare_cb };
+	}, sub {
+		my $fh = shift;
+		local $stash = $stash_ref;
+		_sock_prepare_cb($fh, $dom);
+	};
 }
 
 sub _sock_prepare_cb {
-	my ($fh) = @_;
+	my ($fh, $dom) = @_;
 	
 	my $sockname = getsockname($fh);
 	my $timeout = $Net::Whois::Raw::TIMEOUT||30;
@@ -199,11 +203,18 @@ sub _sock_prepare_cb {
 		$timeout = $stash->{params}{on_prepare}->($fh);
 	}
 	
-	if (@Net::Whois::Raw::SRC_IPS && $sockname eq getsockname($fh)) {
+	my $server4query = Net::Whois::Raw::Common::get_server($dom);
+	my $rotate_reference = eval { Net::Whois::Raw::get_ips_for_query($server4query) };
+	
+	if (!$rotate_reference && @Net::Whois::Raw::SRC_IPS && $sockname eq getsockname($fh)) {
 		# we have ip and there was no bind request in on_prepare callback
-		my $ip = shift @Net::Whois::Raw::SRC_IPS;
+		$rotate_reference = \@Net::Whois::Raw::SRC_IPS;
+	}
+	
+	if ($rotate_reference) {
+		my $ip = shift @$rotate_reference;
 		bind $fh, AnyEvent::Socket::pack_sockaddr(0, parse_address($ip));
-		push @Net::Whois::Raw::SRC_IPS, $ip;
+		push @$rotate_reference, $ip; # rotate ips
 	}
 	
 	return exists $stash->{params}{timeout} ?
@@ -228,11 +239,11 @@ sub www_whois_query_ae {
 	my ($name, $tld) = Net::Whois::Raw::Common::split_domain( $dom );
 	my @http_query_urls = @{Net::Whois::Raw::Common::get_http_query_url($dom)};
 	
-	www_whois_query_ae_request(\@http_query_urls, $tld);
+	www_whois_query_ae_request(\@http_query_urls, $tld, $dom);
 }
 
 sub www_whois_query_ae_request {
-	my ($urls, $tld) = @_;
+	my ($urls, $tld, $dom) = @_;
 	
 	my $qurl = shift @$urls;
 	unless ($qurl) {
@@ -248,14 +259,14 @@ sub www_whois_query_ae_request {
 	
 	my $cb = sub {
 		my ($resp, $headers) = @_;
+		local $stash = $stash_ref;
 		
 		if (!$resp || $headers->{Status} > 299) {
-			www_whois_query_ae_request($urls, $tld);
+			www_whois_query_ae_request($urls, $tld, $dom);
 		}
 		else {
 			chomp $resp;
 			$resp = Net::Whois::Raw::Common::parse_www_content($resp, $tld, $qurl->{url}, $Net::Whois::Raw::CHECK_EXCEED);
-			local $stash = $stash_ref;
 			push @{$stash->{results}{www_whois_query}}, $resp;
 			$stash->{calls}{www_whois_query} = 0;
 			$stash->{caller}->(@{$stash->{args}});
@@ -264,7 +275,12 @@ sub www_whois_query_ae_request {
 	
 	my $headers = {Referer => $referer};
 	my @params;
-	push @params, on_prepare => sub { local $stash = $stash_ref; &_sock_prepare_cb };
+	push @params, on_prepare => sub { 
+		my $fh = shift;
+		local $stash = $stash_ref;
+		_sock_prepare_cb($fh, $dom);
+	};
+	
 	if (exists $stash->{params}{timeout}) {
 		push @params, timeout => $stash->{params}{timeout};
 	}
@@ -325,19 +341,19 @@ AnyEvent::Whois::Raw - Non-blocking wrapper for Net::Whois::Raw
   $Net::Whois::Raw::CHECK_FAIL = 1;
   
   whois 'google.com', timeout => 10, sub {
-      my $data = shift;
-      if ($data) {
-          my $srv = shift;
-          print "$data from $srv\n";
-      }
-      elsif (! defined $data) {
-          my $srv = shift;
-          print "no information for domain on $srv found";
-      }
-      else {
-          my $reason = shift;
-          print "whois error: $reason";
-      }
+    my $data = shift;
+    if ($data) {
+      my $srv = shift;
+      print "$data from $srv\n";
+    }
+    elsif (! defined $data) {
+      my $srv = shift;
+      print "no information for domain on $srv found";
+    }
+    else {
+      my $reason = shift;
+      print "whois error: $reason";
+    }
   };
 
 =head1 DESCRIPTION
@@ -384,9 +400,9 @@ Timeout for whois request in seconds
 Same as prepare callback from AnyEvent::Socket. So you can bind socket to some ip:
 
   whois 'google.com', on_prepare => sub {
-      bind $_[0], AnyEvent::Socket::pack_sockaddr(0, AnyEvent::Socket::parse_ipv4($ip))); 
+    bind $_[0], AnyEvent::Socket::pack_sockaddr(0, AnyEvent::Socket::parse_ipv4($ip))); 
   }, sub {
-      my $info = shift;
+    my $info = shift;
   }
 
 =back
